@@ -1,0 +1,253 @@
+//@version=5
+indicator("Last Session High/Low with ATR/DTR + PHOD/PLOD", overlay=true)
+
+// Временные рамки сессии
+session = input.session("1700-0800", "Session Time")
+
+var float sessionHigh = na
+var float sessionLow = na
+var float mcp = na  // Median Control Point
+
+// ID линий
+var line highLine = na
+var line lowLine = na
+var line mcpLine = na
+var line startLine = na
+var line endLine = na
+var line atrPlus100Line = na
+var line atrPlus70Line = na
+var line atrMinus70Line = na
+var line atrMinus100Line = na
+var line phodLine = na
+var line plodLine = na
+
+var label atrPlus100Label = na
+var label atrPlus70Label = na
+var label atrMinus70Label = na
+var label atrMinus100Label = na
+var label highLabel = na
+var label lowLabel = na
+var label mcpLabel = na
+var label startLabel = na
+var label endLabel = na
+var label phodLabel = na
+var label plodLabel = na
+
+getLineStyle(style) =>
+    if style == "Solid"
+        line.style_solid
+    else
+        if style == "Dashed"
+            line.style_dashed
+        else
+            line.style_dotted
+
+
+
+//ATR100Line
+
+atrPlus100Color = input.color(color.blue, "ATR + 100 Line Color")
+atrPlus100Width = input.int(2, "ATR + 100 Line Width", minval=1, maxval=5)
+atrPlus100Style = input.string("Solid", "ATR + 100 Line Style", options=["Solid", "Dashed", "Dotted"])
+
+//TR70Line
+atrPlus70Color = input.color(color.blue, "ATR + 70 Line Color")
+atrPlus70Width = input.int(2, "ATR + 70 Line Width", minval=1, maxval=5)
+atrPlus70Style = input.string("Solid", "ATR + 70 Line Style", options=["Solid", "Dashed", "Dotted"])
+
+//ATR-100Line
+atrMinus100Color = input.color(color.blue, "ATR - 100 Line Color")
+atrMinus100Width = input.int(2, "ATR - 100 Line Width", minval=1, maxval=5)
+atrMinus100Style = input.string("Solid", "ATR - 100 Line Style", options=["Solid", "Dashed", "Dotted"])
+
+//ATR line-70
+atrMinus70Color = input.color(color.blue, "ATR - 70 Line Color")
+atrMinus70Width = input.int(2, "ATR - 70 Line Width", minval=1, maxval=5)
+atrMinus70Style = input.string("Solid", "ATR - 70 Line Style", options=["Solid", "Dashed", "Dotted"])
+
+//PLOD LINE
+PLODColor = input.color(color.gray, "PLOD Line Color")
+PLODWidth = input.int(2, "PLOD Line Width", minval=1, maxval=5)
+PLODStyle = input.string("Solid", "PLOD Line Style", options=["Solid", "Dashed", "Dotted"])
+
+//PHOD Line
+PHODColor = input.color(color.gray, "PHOD Line Color")
+PHODWidth = input.int(2, "PHOD Line Width", minval=1, maxval=5)
+PHODStyle = input.string("Solid", "PHOD  Line Style", options=["Solid", "Dashed", "Dotted"])
+
+//HighLine
+HighColor = input.color(color.red, "Session High Line Color")
+HighWidth = input.int(2, "Session High Line Width", minval=1, maxval=5)
+HighStyle = input.string("Solid", "Session High  Line Style", options=["Solid", "Dashed", "Dotted"])
+
+//LOWLIne
+LOWColor = input.color(color.green, "Session Low Line Color")
+LOWWidth = input.int(2, "Session Low Line Width", minval=1, maxval=5)
+LOWStyle = input.string("Solid", "Session Low  Line Style", options=["Solid", "Dashed", "Dotted"])
+
+//MCP LINE
+MCPColor = input.color(color.orange, "Median Control Point Line Color")
+MCPWidth = input.int(2, "Median Control Point Line Width", minval=1, maxval=5)
+MCPStyle = input.string("Solid", "Median Control Point  Line Style", options=["Solid", "Dashed", "Dotted"])
+
+// Флаг для отслеживания начала и конца сессии
+var bool sessionStarted = false
+
+// Определение, входит ли текущая свеча в сессию
+inSession = not na(time(timeframe.period, session))
+
+// Добавляем ATR (округленный)
+TimeFrame = input.timeframe("D", "Timeframe the ATR is Calculated off of")
+atr = request.security(syminfo.ticker, TimeFrame, ta.atr(14))
+atr2 = math.round(atr, 2)
+
+// PHOD и PLOD (High и Low предыдущего дня, исправлено)
+phod = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_on)
+plod = request.security(syminfo.tickerid, "D", low[1], lookahead=barmerge.lookahead_on)
+
+if not inSession and sessionStarted
+    // Удаляем предыдущие линии и лейблы перед построением новых
+    if not na(highLine)
+        line.delete(highLine)
+    if not na(lowLine)
+        line.delete(lowLine)
+    if not na(startLine)
+        line.delete(startLine)
+    if not na(endLine)
+        line.delete(endLine)
+    if not na(mcpLine)
+        line.delete(mcpLine)
+    if not na(atrPlus100Line)
+        line.delete(atrPlus100Line)
+    if not na(atrPlus70Line)
+        line.delete(atrPlus70Line)
+    if not na(atrMinus70Line)
+        line.delete(atrMinus70Line)
+    if not na(atrMinus100Line)
+        line.delete(atrMinus100Line)
+    if not na(phodLine)
+        line.delete(phodLine)
+    if not na(plodLine)
+        line.delete(plodLine)
+
+    if not na(atrPlus100Label)
+        label.delete(atrPlus100Label)
+    if not na(atrPlus70Label)
+        label.delete(atrPlus70Label)
+    if not na(atrMinus70Label)
+        label.delete(atrMinus70Label)
+    if not na(atrMinus100Label)
+        label.delete(atrMinus100Label)
+    if not na(highLabel)
+        label.delete(highLabel)
+    if not na(lowLabel)
+        label.delete(lowLabel)
+    if not na(mcpLabel)
+        label.delete(mcpLabel)
+    if not na(startLabel)
+        label.delete(startLabel)
+    if not na(endLabel)
+        label.delete(endLabel)
+    if not na(phodLabel)
+        label.delete(phodLabel)
+    if not na(plodLabel)
+        label.delete(plodLabel)
+
+    // Рассчитываем уровни ATR на основе atr2
+    atrPlus100 = sessionHigh + atr2
+    atrPlus70 = sessionHigh + (0.7 * atr2)
+    atrMinus70 = sessionLow - (0.7 * atr2)
+    atrMinus100 = sessionLow - atr2
+
+    // Рисуем линии ATR+100, ATR+70, ATR-70, ATR-100
+    atrPlus100Line := line.new(bar_index, atrPlus100, bar_index + 10, atrPlus100, 
+                           color=atrPlus100Color, 
+                           width=atrPlus100Width, 
+                           style=getLineStyle(atrPlus100Style), 
+                           extend=extend.right)
+
+    atrPlus100Label := label.new(bar_index + 10, atrPlus100, text="ATR + 100", color=atrPlus100Color, style=label.style_label_right)
+    // atrPlus70Line := line.new(bar_index, atrPlus70, bar_index + 10, atrPlus70, color=color.blue, width=2, extend=extend.right)
+    atrPlus70Line := line.new(bar_index, atrPlus70, bar_index + 10, atrPlus70, 
+                           color=atrPlus70Color, 
+                           width=atrPlus70Width, 
+                           style=getLineStyle(atrPlus70Style), 
+                           extend=extend.right)
+
+    atrPlus70Label := label.new(bar_index, atrPlus70, text="ATR + 70", color=atrPlus70Color, style=label.style_label_right)
+
+    // atrMinus70Line := line.new(bar_index, atrMinus70, bar_index + 10, atrMinus70, color=color.blue, width=2, extend=extend.right)
+    atrMinus70Line := line.new(bar_index, atrMinus70, bar_index + 10, atrMinus70, 
+                           color=atrMinus70Color, 
+                           width=atrMinus70Width, 
+                           style=getLineStyle(atrMinus70Style), 
+                           extend=extend.right)
+    atrMinus70Label := label.new(bar_index, atrMinus70, text="ATR - 70", color=atrMinus70Color, style=label.style_label_right)
+
+    // atrMinus100Line := line.new(bar_index, atrMinus100, bar_index + 10, atrMinus100, color=color.purple, width=2, extend=extend.right)
+    atrMinus100Line := line.new(bar_index, atrMinus100, bar_index + 10, atrMinus100, 
+                           color=atrMinus100Color, 
+                           width=atrMinus100Width, 
+                           style=getLineStyle(atrMinus100Style), 
+                           extend=extend.right)
+
+    atrMinus100Label := label.new(bar_index, atrMinus100, text="ATR - 100", color=atrMinus100Color, style=label.style_label_right)
+
+    // Линии PHOD и PLOD
+    // phodLine := line.new(bar_index, phod, bar_index + 10, phod, color=color.yellow, width=2, extend=extend.right)
+    phodLine := line.new(bar_index, phod, bar_index + 10, phod, 
+                           color=PHODColor, 
+                           width=PHODWidth, 
+                           style=getLineStyle(PHODStyle), 
+                           extend=extend.right)
+
+    phodLabel := label.new(bar_index, phod, text="PHOD", color=PHODColor, style=label.style_label_right)
+
+    // plodLine := line.new(bar_index, plod, bar_index + 10, plod, color=color.black, width=2, extend=extend.right)
+    plodLine := line.new(bar_index, plod, bar_index + 10, plod, 
+                           color=PLODColor, 
+                           width=PLODWidth, 
+                           style=getLineStyle(PLODStyle), 
+                           extend=extend.right)
+    plodLabel := label.new(bar_index, plod, text="PLOD", color=PLODColor, style=label.style_label_right)
+
+    // Зафиксированные линии на sessionHigh и sessionLow с продлением вправо
+    // highLine := line.new(bar_index, sessionHigh, bar_index + 10, sessionHigh, color=color.green, width=2, extend=extend.right)
+    highLine := line.new(bar_index, sessionHigh, bar_index + 10, sessionHigh, 
+                           color=HighColor, 
+                           width=HighWidth, 
+                           style=getLineStyle(HighStyle), 
+                           extend=extend.right)
+    highLabel := label.new(bar_index, sessionHigh, text="Session High", color=HighColor, style=label.style_label_right)
+
+    // lowLine := line.new(bar_index, sessionLow, bar_index + 10, sessionLow, color=color.red, width=2, extend=extend.right)
+    lowLine := line.new(bar_index, sessionLow, bar_index + 10, sessionLow, 
+                           color=LOWColor, 
+                           width=LOWWidth, 
+                           style=getLineStyle(LOWStyle), 
+                           extend=extend.right)
+    lowLabel := label.new(bar_index, sessionLow, text="Session Low", color=LOWColor, style=label.style_label_right)
+
+    // Рассчитываем Median Control Point (MCP)
+    mcp := (sessionHigh + sessionLow) / 2
+
+    // Рисуем линию MCP
+    // mcpLine := line.new(bar_index, mcp, bar_index + 10, mcp, color=color.orange, width=2, extend=extend.right)
+    mcpLine := line.new(bar_index, mcp, bar_index + 10, mcp, 
+                           color=MCPColor, 
+                           width=MCPWidth, 
+                           style=getLineStyle(MCPStyle), 
+                           extend=extend.right)
+    mcpLabel := label.new(bar_index, mcp, text="Median Control Point", color=MCPColor, style=label.style_label_right)
+
+    // Сбрасываем значения для следующей сессии
+    sessionStarted := false
+    sessionHigh := na
+    sessionLow := na
+    mcp := na
+
+// Обновляем значения high и low только во время сессии
+if inSession
+    sessionHigh := na(sessionHigh) ? high : math.max(sessionHigh, high)
+    sessionLow := na(sessionLow) ? low : math.min(sessionLow, low)
+    sessionStarted := true
